@@ -59,6 +59,8 @@ This repository collects all of my containerization works and serves as a templa
   This means no "entire" Python runtime and dependencies is needed in the final image.  
   This article demonstrates based on the most basic premise and may require some adjustments in practical applications.  
   Starting from the `debian:slim` will make life easier. 😉
+- [Using uv in Docker | uv](https://docs.astral.sh/uv/guides/integration/docker/#non-editable-installs)  
+  Official documentation for using `uv` in Docker.
 
 ### Podman
 
