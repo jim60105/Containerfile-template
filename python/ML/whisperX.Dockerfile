@@ -19,28 +19,44 @@ ARG TORCH_HOME=${CACHE_HOME}/torch
 ARG HF_HOME=${CACHE_HOME}/huggingface
 
 ########################################
-# Base stage
+# Base stage for amd64
 ########################################
-FROM python:3.11-slim as base
+FROM docker.io/library/python:3.11-slim-bullseye AS prepare_base_amd64
 
 # RUN mount cache for multi-arch: https://github.com/docker/buildx/issues/549#issuecomment-1788297892
 ARG TARGETARCH
 ARG TARGETVARIANT
 
+WORKDIR /tmp
+
+ENV NVIDIA_VISIBLE_DEVICES=all
+ENV NVIDIA_DRIVER_CAPABILITIES=compute,utility
+
+########################################
+# Base stage for arm64
+########################################
+FROM docker.io/library/python:3.11-slim-bullseye AS prepare_base_arm64
+
+# RUN mount cache for multi-arch: https://github.com/docker/buildx/issues/549#issuecomment-1788297892
+ARG TARGETARCH
+ARG TARGETVARIANT
+
+WORKDIR /tmp
+
 # Missing dependencies for arm64 (needed for build-time and run-time)
 # https://github.com/jim60105/docker-whisperX/issues/14
-ARG TARGETPLATFORM
 RUN --mount=type=cache,id=apt-$TARGETARCH$TARGETVARIANT,sharing=locked,target=/var/cache/apt \
     --mount=type=cache,id=aptlists-$TARGETARCH$TARGETVARIANT,sharing=locked,target=/var/lib/apt/lists \
-    if [ "$TARGETPLATFORM" = "linux/arm64" ]; then \
     apt-get update && apt-get install -y --no-install-recommends \
-    libgomp1=12.2.0-14 libsndfile1=1.2.0-1; \
-    fi
+    libgomp1 libsndfile1
+
+# Select the base stage by target architecture
+FROM prepare_base_$TARGETARCH$TARGETVARIANT AS base
 
 ########################################
 # Build stage
 ########################################
-FROM base as build
+FROM base AS build
 
 # RUN mount cache for multi-arch: https://github.com/docker/buildx/issues/549#issuecomment-1788297892
 ARG TARGETARCH
@@ -48,39 +64,36 @@ ARG TARGETVARIANT
 
 WORKDIR /app
 
-# Install under /root/.local
-ARG PIP_USER="true"
-ARG PIP_NO_WARN_SCRIPT_LOCATION=0
-ARG PIP_ROOT_USER_ACTION="ignore"
-ARG PIP_NO_COMPILE="true"
-ARG PIP_DISABLE_PIP_VERSION_CHECK="true"
+# Install uv
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
 
-# Install requirements
-RUN --mount=type=cache,id=pip-$TARGETARCH$TARGETVARIANT,sharing=locked,target=/root/.cache/pip \
-    pip install -U --force-reinstall pip setuptools wheel && \
-    pip install -U --extra-index-url https://download.pytorch.org/whl/cu118 \
-    torch==2.1.1 torchaudio==2.1.1 \
-    pyannote.audio==3.1.1
+ENV UV_PROJECT_ENVIRONMENT=/venv
+ENV VIRTUAL_ENV=/venv
+ENV UV_LINK_MODE=copy
+ENV UV_PYTHON_DOWNLOADS=0
 
-RUN --mount=type=cache,id=pip-$TARGETARCH$TARGETVARIANT,sharing=locked,target=/root/.cache/pip \
-    --mount=source=whisperX/requirements.txt,target=requirements.txt \
-    pip install -r requirements.txt
+# Install big dependencies separately for layer caching
+RUN --mount=type=cache,id=uv-$TARGETARCH$TARGETVARIANT,sharing=locked,target=/root/.cache/uv \
+    uv venv --system-site-packages /venv && \
+    uv pip install --no-deps \
+    "torch<2.4.0" \
+    "pyannote.audio==3.3.2"
 
-# Install whisperX
-RUN --mount=type=cache,id=pip-$TARGETARCH$TARGETVARIANT,sharing=locked,target=/root/.cache/pip \
+# Install whisperX dependencies
+RUN --mount=type=cache,id=uv-$TARGETARCH$TARGETVARIANT,sharing=locked,target=/root/.cache/uv \
+    --mount=type=bind,source=whisperX/pyproject.toml,target=pyproject.toml \
+    --mount=type=bind,source=whisperX/uv.lock,target=uv.lock \
+    uv sync --frozen --no-dev --no-install-project --no-editable
+
+# Install whisperX project
+RUN --mount=type=cache,id=uv-$TARGETARCH$TARGETVARIANT,sharing=locked,target=/root/.cache/uv \
     --mount=source=whisperX,target=.,rw \
-    pip install . && \
-    # Cleanup
-    find "/root/.local" -name '*.pyc' -print0 | xargs -0 rm -f || true ; \
-    find "/root/.local" -type d -name '__pycache__' -print0 | xargs -0 rm -rf || true ;
+    uv sync --frozen --no-dev --no-editable
 
 ########################################
 # Final stage for no_model
 ########################################
-FROM base as no_model
-
-ENV NVIDIA_VISIBLE_DEVICES all
-ENV NVIDIA_DRIVER_CAPABILITIES compute,utility
+FROM base AS no_model
 
 # We don't need them anymore
 RUN pip3.11 uninstall -y pip wheel && \
@@ -100,15 +113,16 @@ ENV TORCH_HOME=${TORCH_HOME}
 ENV HF_HOME=${HF_HOME}
 
 RUN install -d -m 775 -o $UID -g 0 /licenses && \
+    install -d -m 775 -o $UID -g 0 /root && \
     install -d -m 775 -o $UID -g 0 ${CACHE_HOME} && \
     install -d -m 775 -o $UID -g 0 ${CONFIG_HOME}
 
 # ffmpeg
-COPY --link --from=ghcr.io/jim60105/static-ffmpeg-upx:7.0-1 /ffmpeg /usr/local/bin/
-# COPY --link --from=ghcr.io/jim60105/static-ffmpeg-upx:7.0-1 /ffprobe /usr/local/bin/
+COPY --link --from=ghcr.io/jim60105/static-ffmpeg-upx:7.1 /ffmpeg /usr/local/bin/
+# COPY --link --from=ghcr.io/jim60105/static-ffmpeg-upx:7.1 /ffprobe /usr/local/bin/
 
 # dumb-init
-COPY --link --from=ghcr.io/jim60105/static-ffmpeg-upx:7.0-1 /dumb-init /usr/local/bin/
+COPY --link --from=ghcr.io/jim60105/static-ffmpeg-upx:7.1 /dumb-init /usr/local/bin/
 
 # Copy licenses (OpenShift Policy)
 COPY --link --chown=$UID:0 --chmod=775 LICENSE /licenses/LICENSE
@@ -116,15 +130,14 @@ COPY --link --chown=$UID:0 --chmod=775 whisperX/LICENSE /licenses/whisperX.LICEN
 
 # Copy dependencies and code (and support arbitrary uid for OpenShift best practice)
 # https://docs.openshift.com/container-platform/4.14/openshift_images/create-images.html#use-uid_create-images
-COPY --link --chown=$UID:0 --chmod=775 --from=build /root/.local /home/$UID/.local
+COPY --link --chown=$UID:0 --chmod=775 --from=build /venv /venv
 
-ENV PATH="/home/$UID/.local/bin:$PATH"
-ENV PYTHONPATH="/home/$UID/.local/lib/python3.11/site-packages:$PYTHONPATH"
+ENV PATH="/venv/bin${PATH:+:${PATH}}"
+ENV PYTHONPATH="/venv/lib/python3.11/site-packages"
 
-ARG WHISPER_MODEL
-ENV WHISPER_MODEL=
-ARG LANG
-ENV LANG=
+# Test whisperX
+RUN python3 -c 'import whisperx;' && \
+    whisperx -h
 
 WORKDIR /app
 
@@ -156,46 +169,56 @@ LABEL name="jim60105/docker-whisperX" \
 # load_whisper stage
 # This stage will be tagged for caching in CI.
 ########################################
-FROM ${NO_MODEL_STAGE} as load_whisper
+FROM ${NO_MODEL_STAGE} AS load_whisper
 
-ARG TORCH_HOME
-ARG HF_HOME
+ARG CONFIG_HOME
+ARG XDG_CONFIG_HOME=${CONFIG_HOME}
+ARG HOME="/root"
 
-# Preload vad model
-RUN python3 -c 'from whisperx.vad import load_vad_model; load_vad_model("cpu");'
+# Preload Silero vad model
+RUN python3 <<EOF
+import torch
+torch.hub.load(repo_or_dir='snakers4/silero-vad',
+               model='silero_vad',
+               force_reload=False,
+               onnx=False,
+               trust_repo=True)
+EOF
 
 # Preload fast-whisper
 ARG WHISPER_MODEL
-RUN python3 -c 'import faster_whisper; model = faster_whisper.WhisperModel("'${WHISPER_MODEL}'")'
+ENV WHISPER_MODEL=${WHISPER_MODEL}
+
+# Preload fast-whisper
+RUN echo "Preload whisper model: ${WHISPER_MODEL}" && \
+    python3 -c "import faster_whisper; model = faster_whisper.WhisperModel('${WHISPER_MODEL}')"
 
 ########################################
 # load_align stage
 ########################################
-FROM ${LOAD_WHISPER_STAGE} as load_align
+FROM ${LOAD_WHISPER_STAGE} AS load_align
 
-ARG TORCH_HOME
-ARG HF_HOME
+ARG LANG
+ENV LANG=${LANG}
 
 # Preload align models
-ARG LANG
-
 RUN --mount=source=load_align_model.py,target=load_align_model.py \
-    for i in ${LANG}; do echo "Aliging lang $i"; python3 load_align_model.py "$i"; done
+    for i in ${LANG}; do echo "Preload align model: $i"; python3 load_align_model.py "$i"; done
 
 ########################################
 # Final stage with model
 ########################################
-FROM ${NO_MODEL_STAGE} as final
+FROM ${NO_MODEL_STAGE} AS final
 
 ARG UID
 
 ARG CACHE_HOME
 COPY --link --chown=$UID:0 --chmod=775 --from=load_align ${CACHE_HOME} ${CACHE_HOME}
 
-ARG WHISPER_MODEL
-ENV WHISPER_MODEL=${WHISPER_MODEL}
 ARG LANG
 ENV LANG=${LANG}
+ARG WHISPER_MODEL
+ENV WHISPER_MODEL=${WHISPER_MODEL}
 
 # Take the first language from LANG env variable
 ENTRYPOINT [ "dumb-init", "--", "/bin/sh", "-c", "LANG=$(echo ${LANG} | cut -d ' ' -f1); whisperx --model \"${WHISPER_MODEL}\" --language \"${LANG}\" \"$@\"" ]

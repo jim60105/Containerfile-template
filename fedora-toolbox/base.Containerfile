@@ -3,6 +3,7 @@ ARG UID=1000
 ARG VERSION=EDGE
 ARG RELEASE=0
 ARG BASE_IMAGE=registry.fedoraproject.org/fedora-toolbox:42
+ARG PNPM_HOME=/pnpm-store
 
 ########################################
 # Base stage
@@ -47,11 +48,14 @@ EOF
 RUN bins=( \
     "flatpak" \
     "podman" \
+    "buildah" \
+    "skopeo" \
     "docker" \
     "rpm-ostree" \
     "systemctl" \
     "xdg-open" \
     "kitty" \
+    "waveterm" \
     ); \
     for f in "${bins[@]}"; do \
     ln -s host-runner "/host-runner/$f";\
@@ -84,45 +88,62 @@ RUN --mount=type=cache,id=dnf-$TARGETARCH$TARGETVARIANT,sharing=locked,target=/v
     dnf -y upgrade && \
     dnf -y install \
     xdg-utils \
-    jq
+    jq \
+    zsh \
+    vim
+
+# Install gh-cli
+RUN --mount=type=cache,id=dnf-$TARGETARCH$TARGETVARIANT,sharing=locked,target=/var/cache/dnf \
+    dnf config-manager addrepo --from-repofile=https://cli.github.com/packages/rpm/gh-cli.repo && \
+    dnf -y install gh --repo gh-cli
 
 # Fonts
 COPY --chown=$UID:0 --chmod=775 --from=font-unpacker /fonts /usr/local/share/fonts
 RUN --mount=type=cache,id=dnf-$TARGETARCH$TARGETVARIANT,sharing=locked,target=/var/cache/dnf \
     dnf -y install \
     google-noto-sans-cjk-fonts \
+    google-noto-color-emoji-fonts \
     cascadia-fonts-all \
     hanamin-fonts
 
 # Install os keyring
-#! Following this guide to setup os keyring to use gnome-libsecret:
-# https://code.visualstudio.com/docs/editor/settings-sync#_recommended-configure-the-keyring-to-use-with-vs-code
 ENV GCM_CREDENTIAL_STORE=gpg
 RUN --mount=type=cache,id=dnf-$TARGETARCH$TARGETVARIANT,sharing=locked,target=/var/cache/dnf \
     dnf -y install seahorse
 
+# Install development tools
+RUN --mount=type=cache,id=dnf-$TARGETARCH$TARGETVARIANT,sharing=locked,target=/var/cache/dnf \
+    dnf -y install @development-tools @c-development openssl-devel cmake ninja-build pkg-config
+
 # Install .NET
 RUN --mount=type=cache,id=dnf-$TARGETARCH$TARGETVARIANT,sharing=locked,target=/var/cache/dnf \
-    dnf -y install dotnet-sdk-8.0
+    dnf -y install dotnet-sdk-8.0 dotnet-sdk-9.0
 
-# Install Rustup
+# Install Java 21
 RUN --mount=type=cache,id=dnf-$TARGETARCH$TARGETVARIANT,sharing=locked,target=/var/cache/dnf \
-    dnf -y install rustup
+    dnf -y install java-21-openjdk
 
-# Install Java 17 (JetBrains loves this)
+# Install nodejs
+ARG PNPM_HOME
+ENV PNPM_HOME=${PNPM_HOME}
 RUN --mount=type=cache,id=dnf-$TARGETARCH$TARGETVARIANT,sharing=locked,target=/var/cache/dnf \
-    dnf -y install java-17-openjdk
+    install -d -m 775 -o $UID -g 0 ${PNPM_HOME} && \
+    dnf -y install nodejs nodejs-npm pnpm yarnpkg
+ENV PATH="${PNPM_HOME}${PATH:+:${PATH}}"
 
 # Install git-credential-manager (This needs .NET 8)
 RUN curl -L https://aka.ms/gcm/linux-install-source.sh | sh && \
-git-credential-manager configure
+    git-credential-manager configure
 
 # Install aria2
 RUN --mount=type=cache,id=dnf-$TARGETARCH$TARGETVARIANT,sharing=locked,target=/var/cache/dnf \
     dnf -y install aria2
 
 # Copy toolbox runners
-COPY --chown=$UID:0 --chmod=775 video/runner /copy-to-host
+COPY --chown=$UID:0 --chmod=775 base/runner /copy-to-host
+
+# Input method for JetBrains IDE
+ENV XMODIFIERS=@im=fcitx
 
 ARG VERSION
 ARG RELEASE
