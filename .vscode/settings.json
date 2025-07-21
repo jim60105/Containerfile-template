@@ -1,6 +1,7 @@
 {
     "cSpell.words": [
         "Buildx",
+        "Containerfile",
         "distroless",
         "Dockerfiles",
         "DOCKERHUB",
