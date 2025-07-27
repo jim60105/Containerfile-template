@@ -75,8 +75,10 @@ ENV UV_PYTHON_DOWNLOADS=0
 # Install big dependencies separately for layer caching
 RUN --mount=type=cache,id=uv-$TARGETARCH$TARGETVARIANT,sharing=locked,target=/root/.cache/uv \
     uv venv --system-site-packages /venv && \
-    uv pip install --no-deps \
-    "torch<2.4.0" \
+    uv pip install --no-deps --index "https://download.pytorch.org/whl/cu128" \
+    "torch==2.7.1+cu128" \
+    "torchaudio" \
+    "triton" \
     "pyannote.audio==3.3.2"
 
 # Install whisperX dependencies
@@ -134,6 +136,7 @@ COPY --link --chown=$UID:0 --chmod=775 --from=build /venv /venv
 
 ENV PATH="/venv/bin${PATH:+:${PATH}}"
 ENV PYTHONPATH="/venv/lib/python3.11/site-packages"
+ENV LD_LIBRARY_PATH="/venv/lib/python3.11/site-packages/nvidia/cudnn/lib${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}"
 
 # Test whisperX
 RUN python3 -c 'import whisperx;' && \
