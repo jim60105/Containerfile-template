@@ -107,4 +107,5 @@ You should have received a copy of the GNU General Public License along with thi
 I, 陳鈞, authorize the following organizations to use this project in a closed-source manner in any projects I have participated in/cooperated on.
 
 - Duotify Inc.
-- CTBC
+- CTBC Commercial Bank Co., Ltd.
+- Chunghwa Telecom Co., Ltd.
