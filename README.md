@@ -104,7 +104,7 @@ You should have received a copy of the GNU General Public License along with thi
 
 ### Special Closed Source Authorization
 
-I, 陳鈞, authorize the following organizations to use this project in a closed-source manner in any projects I have participated in/cooperated on.
+I, 陳鈞, authorize the following organizations and their clients to use this project in a closed-source capacity for any projects I have participated in or collaborated on.
 
 - Duotify Inc.
 - CTBC Commercial Bank Co., Ltd.
