@@ -3,7 +3,6 @@ ARG UID=1000
 ARG VERSION=EDGE
 ARG RELEASE=0
 ARG BASE_IMAGE=registry.fedoraproject.org/fedora-toolbox:42
-ARG PNPM_HOME=/pnpm-store
 
 ########################################
 # Base stage
@@ -36,18 +35,14 @@ RUN unzip -uo /tmp/iansui.zip -d /fonts/iansui && \
 ########################################
 FROM base AS host-runner
 
-WORKDIR /host-runner
+COPY --chown=$UID:0 --chmod=775 base/host-runner /host-runner
 
-RUN cat <<-"EOF" > /host-runner/host-runner
-#!/bin/bash
-executable="$(basename ${0})"
-exec flatpak-spawn --host "${executable}" "${@}"
-EOF
+WORKDIR /host-runner
 
 # Setup host-runner script and symlinks
 RUN bins=( \
     "flatpak" \
-    "podman" \
+    # "podman" \
     "buildah" \
     "skopeo" \
     "docker" \
@@ -56,6 +51,9 @@ RUN bins=( \
     "xdg-open" \
     "kitty" \
     "waveterm" \
+    "chrome" \
+    "firefox" \
+    "brave" \
     ); \
     for f in "${bins[@]}"; do \
     ln -s host-runner "/host-runner/$f";\
@@ -124,12 +122,8 @@ RUN --mount=type=cache,id=dnf-$TARGETARCH$TARGETVARIANT,sharing=locked,target=/v
     dnf -y install java-21-openjdk
 
 # Install nodejs
-ARG PNPM_HOME
-ENV PNPM_HOME=${PNPM_HOME}
 RUN --mount=type=cache,id=dnf-$TARGETARCH$TARGETVARIANT,sharing=locked,target=/var/cache/dnf \
-    install -d -m 775 -o $UID -g 0 ${PNPM_HOME} && \
-    dnf -y install nodejs nodejs-npm pnpm yarnpkg
-ENV PATH="${PNPM_HOME}${PATH:+:${PATH}}"
+    dnf -y install nodejs nodejs-npm yarnpkg
 
 # Install git-credential-manager (This needs .NET 8)
 RUN curl -L https://aka.ms/gcm/linux-install-source.sh | sh && \
