@@ -70,6 +70,8 @@ This repository collects all of my containerization works and serves as a templa
 - [podman-build — Podman documentation](https://docs.podman.io/en/stable/markdown/podman-build.1.html)
 - [How to debug issues with volumes mounted on rootless containers | Enable Sysadmin | Redhat](https://www.redhat.com/sysadmin/debug-rootless-podman-mounted-volumes)
 - [Container permission denied: How to diagnose this error | Enable Sysadmin | Redhat](https://www.redhat.com/sysadmin/container-permission-denied-errors)
+- [Fedora/RHEL 的 Podman GPU 設定手札 - 琳的備忘手札](https://xn--jgy.tw/Container/configuring-gpu-in-linux-podman/)  
+  My article. 😀
 
 ### Advanced Docker
 
