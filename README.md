@@ -38,6 +38,17 @@ This repository collects all of my containerization works and serves as a templa
 | [HoloArchivists/twspace-dl](https://github.com/HoloArchivists/twspace-dl) | Python project containerization with venv solution. | [🔗](https://github.com/HoloArchivists/twspace-dl/blob/main/Dockerfile) |
 | [bmaltais/kohya_ss](https://github.com/bmaltais/kohya_ss)| Python project containerization with ML dependencies (CUDA, torch, xformers). I helped this amazing open-source project set up the docker build CI. | [🔗](https://github.com/bmaltais/kohya_ss/blob/master/Dockerfile) |
 
+## My articles 😀
+
+- [Fedora/RHEL 的 Podman GPU 設定手札 - 琳的備忘手札](https://xn--jgy.tw/Container/configuring-gpu-in-linux-podman/)  
+  This article will discuss how to set up Podman, Podman Compose, the NVIDIA Container Toolkit, and the Container Device Interface (CDI) to enable GPU usage within containers.
+
+  I provide detailed step-by-step instructions from installation to configuration and share practical application examples.
+- [擺脫 CI/CD 廠商鎖定 (Vendor Lock-in) —— 以 Containerfile 實現跨平台流程 - 琳的備忘手札](https://xn--jgy.tw/Container/multi-stage-containerfile-cicd/)  
+  This article offers a solution: integrating CI/CD build logic into multi-stage builds within a Containerfile, simplifying the pipeline to a single build command for testing and report generation.
+
+  Both local and cloud environments uses the same Containerfile, guaranteeing a truly cross-platform and reproducible build process.
+
 ## Other Awesome Resources
 
 ### Best practices
@@ -70,8 +81,6 @@ This repository collects all of my containerization works and serves as a templa
 - [podman-build — Podman documentation](https://docs.podman.io/en/stable/markdown/podman-build.1.html)
 - [How to debug issues with volumes mounted on rootless containers | Enable Sysadmin | Redhat](https://www.redhat.com/sysadmin/debug-rootless-podman-mounted-volumes)
 - [Container permission denied: How to diagnose this error | Enable Sysadmin | Redhat](https://www.redhat.com/sysadmin/container-permission-denied-errors)
-- [Fedora/RHEL 的 Podman GPU 設定手札 - 琳的備忘手札](https://xn--jgy.tw/Container/configuring-gpu-in-linux-podman/)  
-  My article. 😀
 
 ### Advanced Docker
 
